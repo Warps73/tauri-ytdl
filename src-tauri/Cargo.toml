@@ -26,4 +26,6 @@ rusty_ytdl = "0.7.4"
 tokio = "1.44.1"
 tauri-plugin-shell = "2"
 tauri-plugin-upload = "2"
+tauri-plugin-dialog = "2"
+regex = "1.10.3"
 

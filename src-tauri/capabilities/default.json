@@ -9,6 +9,7 @@
     "core:default",
     "opener:default",
     "shell:default",
-    "upload:default"
+    "upload:default",
+    "dialog:default"
   ]
 }

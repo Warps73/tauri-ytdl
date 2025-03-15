@@ -1,23 +1,22 @@
 import { useState } from 'react';
-import { MantineProvider, Container, TextInput, Button, Paper, Title, Text, Stack, Group, Select } from '@mantine/core';
-import { IconDownload, IconBrandYoutube } from '@tabler/icons-react';
+import { MantineProvider, Container, TextInput, Button, Paper, Title, Text, Stack, Group, Select, Alert } from '@mantine/core';
+import { IconDownload, IconBrandYoutube, IconCheck } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import { invoke } from "@tauri-apps/api/core";
-import { download } from '@tauri-apps/plugin-upload';
-
 
 function App() {
   const [url, setUrl] = useState('');
   const [format, setFormat] = useState('mp4');
   const [downloading, setDownloading] = useState(false);
+  const [downloadedFile, setDownloadedFile] = useState(null);
 
   const handleDownload = async () => {
     if (!url) {
       notifications.show({
-        title: 'Error',
-        message: 'Please enter a YouTube URL',
+        title: 'Erreur',
+        message: 'Veuillez entrer une URL YouTube',
         color: 'red',
       });
       return;
@@ -25,16 +24,20 @@ function App() {
 
     try {
       setDownloading(true);
-      await invoke("download_music", { url :url, format :format })
+      setDownloadedFile(null);
+      const filePath = await invoke("download_music", { url });
+      
+      setDownloadedFile(filePath);
       notifications.show({
-        title: 'Success',
-        message: 'Video downloaded successfully!',
+        title: 'Succès',
+        message: 'Musique téléchargée avec succès !',
         color: 'green',
+        icon: <IconCheck size={16} />,
       });
     } catch (error) {
       notifications.show({
-        title: 'Error',
-        message: error.message || 'Failed to download video',
+        title: 'Erreur',
+        message: error || 'Échec du téléchargement',
         color: 'red',
       });
     } finally {
@@ -53,7 +56,7 @@ function App() {
             </Group>
             
             <Text c="dimmed" ta="center">
-              Enter a YouTube URL to download videos in your preferred format
+              Entrez une URL YouTube pour télécharger la musique
             </Text>
 
             <TextInput
@@ -64,17 +67,6 @@ function App() {
               leftSection={<IconBrandYoutube size={20} />}
             />
 
-            <Select
-              label="Format"
-              value={format}
-              onChange={setFormat}
-              data={[
-                { value: 'mp4', label: 'MP4 Video' },
-                { value: 'mp3', label: 'MP3 Audio' },
-                { value: 'wav', label: 'WAV Audio' },
-              ]}
-            />
-
             <Button
               size="lg"
               leftSection={<IconDownload size={20} />}
@@ -83,8 +75,14 @@ function App() {
               variant="gradient"
               gradient={{ from: 'red', to: 'orange' }}
             >
-              {downloading ? 'Downloading...' : 'Download'}
+              {downloading ? 'Téléchargement en cours...' : 'Télécharger'}
             </Button>
+
+            {downloadedFile && (
+              <Alert title="Téléchargement réussi" color="green" icon={<IconCheck size={16} />}>
+                Fichier sauvegardé : {downloadedFile}
+              </Alert>
+            )}
           </Stack>
         </Paper>
       </Container>

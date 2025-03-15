@@ -24,7 +24,6 @@ function App() {
 
     try {
       setDownloading(true);
-      // TODO: Implement the actual download logic here
       await await invoke("download_music", { url :url, format :format })
       notifications.show({
         title: 'Success',

@@ -1,5 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use std::process::Command;
+use tauri_plugin_shell::ShellExt;
+use tauri_plugin_shell::process::CommandEvent;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -7,23 +8,23 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-async fn download_music(url: String) -> Result<String, String> {
-    let output = Command::new("youtube-dl")
-        .args(&["-x", "--audio-format", "mp3", &url])
-        .output()
-        .map_err(|e| e.to_string())?;
+async fn download_music(app: tauri::AppHandle,url: String) -> Result<String, String> {
+    let sidecar_command = app
+    .shell()
+    .sidecar("youtube-dl")
+    .unwrap()
+    .args(&["-x", "--audio-format", "mp3", "-o", "./downloads/%(title)s.%(ext)s", &url]);
 
-    if output.status.success() {
-        Ok("Téléchargement réussi !".to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("Erreur lors du téléchargement : {}", stderr))
-    }
+    let mut child = sidecar_command.spawn().map_err(|e| e.to_string())?;
+
+    Ok("Téléchargement réussi !".to_string())
+   
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![greet, download_music])
         .run(tauri::generate_context!())

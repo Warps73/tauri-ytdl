@@ -1,6 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
+use tauri_plugin_shell::ShellExt;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -8,15 +8,18 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-async fn download_music(app: tauri::AppHandle,url: String) -> Result<String, String> {
-    let sidecar_command = app
-    .shell()
-    .sidecar("youtube-dl")
-    .unwrap()
-    .args(&["-x", "--audio-format", "mp3", "-o", "./downloads/%(title)s.%(ext)s", &url]);
+async fn download_music(app: tauri::AppHandle, url: String) -> Result<String, String> {
+    let sidecar_command = app.shell().sidecar("youtube-dl").unwrap().args(&[
+        "-x",
+        "--audio-format",
+        "mp3",
+        "-o",
+        "./downloads/%(title)s.%(ext)s",
+        &url,
+    ]);
 
     let mut child = sidecar_command.spawn().map_err(|e| e.to_string())?;
-    
+
     let (mut rx, mut child) = child;
     while let Some(event) = rx.recv().await {
         match event {
@@ -42,6 +45,7 @@ async fn download_music(app: tauri::AppHandle,url: String) -> Result<String, Str
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_upload::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![greet, download_music])

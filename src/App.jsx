@@ -4,6 +4,8 @@ import { IconDownload, IconBrandYoutube } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
+import { invoke } from "@tauri-apps/api/core";
+
 
 function App() {
   const [url, setUrl] = useState('');
@@ -23,7 +25,7 @@ function App() {
     try {
       setDownloading(true);
       // TODO: Implement the actual download logic here
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulated download
+      await await invoke("download_music", { url :url, format :format })
       notifications.show({
         title: 'Success',
         message: 'Video downloaded successfully!',

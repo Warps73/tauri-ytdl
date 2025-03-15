@@ -28,4 +28,5 @@ tauri-plugin-shell = "2"
 tauri-plugin-upload = "2"
 tauri-plugin-dialog = "2"
 regex = "1.10.3"
+dirs = "5.0"
 

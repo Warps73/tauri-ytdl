@@ -8,7 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 function App() {
   const [url, setUrl] = useState('');
-  const [format, setFormat] = useState('mp4');
+  const [format, setFormat] = useState('audio');
   const [downloading, setDownloading] = useState(false);
   const [downloadedFile, setDownloadedFile] = useState(null);
 
@@ -25,7 +25,7 @@ function App() {
     try {
       setDownloading(true);
       setDownloadedFile(null);
-      const filePath = await invoke("download_music", { url });
+      const filePath = await invoke("download_music", { url, format });
       
       setDownloadedFile(filePath);
       notifications.show({
@@ -66,7 +66,15 @@ function App() {
               size="lg"
               leftSection={<IconBrandYoutube size={20} />}
             />
-
+            <Select
+              label="Format"
+              value={format}
+              onChange={setFormat}
+              data={[
+                { value: 'audio', label: 'Audio' },
+                { value: 'video', label: 'Video' },
+              ]}
+            />
             <Button
               size="lg"
               leftSection={<IconDownload size={20} />}

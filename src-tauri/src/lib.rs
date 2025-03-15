@@ -3,6 +3,7 @@ use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 use std::path::PathBuf;
 use regex::Regex;
+use dirs;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -10,24 +11,52 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-async fn download_music(app: tauri::AppHandle, url: String) -> Result<String, String> {
-    let download_dir = PathBuf::from("../downloads");
+async fn download_music(app: tauri::AppHandle, url: String, format: String) -> Result<String, String> {
+    let download_dir = dirs::download_dir()
+        .ok_or_else(|| "Impossible de trouver le dossier de téléchargement".to_string())?;
     let mut file_path = None;
 
-    let sidecar_command = app.shell().sidecar("youtube-dl").unwrap().args(&[
-        "-x",
-        "--audio-format",
-        "mp3",
+    let output_template = download_dir.join("%(title)s.%(ext)s").to_string_lossy().into_owned();
+
+    let mut args = Vec::new();
+    
+    match format.as_str() {
+        "audio" => {
+            args.extend_from_slice(&[
+                "-x",
+                "--audio-format",
+                "mp3",
+                "--audio-quality",
+                "0",
+                "--prefer-ffmpeg",
+            ]);
+        },
+        "video" => {
+            args.extend_from_slice(&[
+                "-f",
+                "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                "--merge-output-format",
+                "mp4",
+            ]);
+        },
+        _ => return Err("Format non supporté. Utilisez 'audio' ou 'video'".to_string()),
+    }
+
+    args.extend_from_slice(&[
         "-o",
-        "../downloads/%(title)s.%(ext)s",
+        &output_template,
         &url,
     ]);
+
+    let sidecar_command = app.shell().sidecar("youtube-dl").unwrap().args(&args);
 
     let mut child = sidecar_command.spawn().map_err(|e| e.to_string())?;
     let (mut rx, mut child) = child;
     
-    // Regex pour extraire le nom du fichier
-    let file_regex = Regex::new(r"\[ffmpeg\] Destination: ../downloads/(.+\.mp3)").unwrap();
+    // Regex pour extraire le nom du fichier, adaptée selon le format
+    let file_extension = if format == "audio" { "mp3" } else { "mp4" };
+    let file_regex = Regex::new(&format!(r#"(?:\[ffmpeg\] Destination: |\[ffmpeg\] Merging formats into "|(?:\[download\] )).+?([^/]+\.{})(?:\"|\s|$)"#, 
+        file_extension)).unwrap();
 
     while let Some(event) = rx.recv().await {
         match event {

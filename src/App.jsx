@@ -26,7 +26,7 @@ function App() {
       setDownloading(true);
       setDownloadedFile(null);
       const filePath = await invoke("download_music", { url, format });
-      
+
       setDownloadedFile(filePath);
       notifications.show({
         title: 'Succès',
@@ -54,7 +54,7 @@ function App() {
               <IconBrandYoutube size={40} color="red" />
               <Title order={1}>YouTube Downloader</Title>
             </Group>
-            
+
             <Text c="dimmed" ta="center">
               Entrez une URL YouTube pour télécharger la musique
             </Text>

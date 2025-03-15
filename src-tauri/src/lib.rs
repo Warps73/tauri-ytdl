@@ -1,7 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
-use std::path::PathBuf;
 use regex::Regex;
 use dirs;
 
@@ -50,8 +49,8 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
 
     let sidecar_command = app.shell().sidecar("youtube-dl").unwrap().args(&args);
 
-    let mut child = sidecar_command.spawn().map_err(|e| e.to_string())?;
-    let (mut rx, mut child) = child;
+    let child = sidecar_command.spawn().map_err(|e| e.to_string())?;
+    let (mut rx, child) = child;
     
     // Regex pour extraire le nom du fichier, adaptée selon le format
     let file_extension = if format == "audio" { "mp3" } else { "mp4" };

@@ -1,50 +1,92 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useState } from 'react';
+import { MantineProvider, Container, TextInput, Button, Paper, Title, Text, Stack, Group, Select } from '@mantine/core';
+import { IconDownload, IconBrandYoutube } from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
+import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [url, setUrl] = useState('');
+  const [format, setFormat] = useState('mp4');
+  const [downloading, setDownloading] = useState(false);
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("download_music", { url :name }));
-  }
+  const handleDownload = async () => {
+    if (!url) {
+      notifications.show({
+        title: 'Error',
+        message: 'Please enter a YouTube URL',
+        color: 'red',
+      });
+      return;
+    }
+
+    try {
+      setDownloading(true);
+      // TODO: Implement the actual download logic here
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulated download
+      notifications.show({
+        title: 'Success',
+        message: 'Video downloaded successfully!',
+        color: 'green',
+      });
+    } catch (error) {
+      notifications.show({
+        title: 'Error',
+        message: error.message || 'Failed to download video',
+        color: 'red',
+      });
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <MantineProvider>
+      <Container size="sm" py="xl">
+        <Paper shadow="md" p="xl" radius="md">
+          <Stack spacing="lg">
+            <Group align="center" justify="center">
+              <IconBrandYoutube size={40} color="red" />
+              <Title order={1}>YouTube Downloader</Title>
+            </Group>
+            
+            <Text c="dimmed" ta="center">
+              Enter a YouTube URL to download videos in your preferred format
+            </Text>
 
-      <div className="row">
-        <a href="https://vitejs.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://reactjs.org" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
+            <TextInput
+              placeholder="https://www.youtube.com/watch?v=..."
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              size="lg"
+              leftSection={<IconBrandYoutube size={20} />}
+            />
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+            <Select
+              label="Format"
+              value={format}
+              onChange={setFormat}
+              data={[
+                { value: 'mp4', label: 'MP4 Video' },
+                { value: 'mp3', label: 'MP3 Audio' },
+                { value: 'wav', label: 'WAV Audio' },
+              ]}
+            />
+
+            <Button
+              size="lg"
+              leftSection={<IconDownload size={20} />}
+              loading={downloading}
+              onClick={handleDownload}
+              variant="gradient"
+              gradient={{ from: 'red', to: 'orange' }}
+            >
+              {downloading ? 'Downloading...' : 'Download'}
+            </Button>
+          </Stack>
+        </Paper>
+      </Container>
+    </MantineProvider>
   );
 }
 

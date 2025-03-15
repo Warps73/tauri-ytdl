@@ -14,7 +14,7 @@ async fn download_music(app: tauri::AppHandle, url: String) -> Result<String, St
         "--audio-format",
         "mp3",
         "-o",
-        "./downloads/%(title)s.%(ext)s",
+        "../downloads/%(title)s.%(ext)s",
         &url,
     ]);
 

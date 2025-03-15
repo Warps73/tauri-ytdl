@@ -5,6 +5,7 @@ import { notifications } from '@mantine/notifications';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import { invoke } from "@tauri-apps/api/core";
+import { download } from '@tauri-apps/plugin-upload';
 
 
 function App() {
@@ -24,7 +25,7 @@ function App() {
 
     try {
       setDownloading(true);
-      await await invoke("download_music", { url :url, format :format })
+      await invoke("download_music", { url :url, format :format })
       notifications.show({
         title: 'Success',
         message: 'Video downloaded successfully!',

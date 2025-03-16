@@ -2,9 +2,9 @@
 name = "youtubedl"
 version = "0.0.2"
 description = "A Tauri App"
-authors = ["timothy.prefol@gmail.com"]
+authors = ["Timothy <timothy.prefol@gmail.com>"]
 edition = "2024"
-
+language = "fr-FR"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]

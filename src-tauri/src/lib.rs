@@ -56,8 +56,7 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
     let (mut rx, child) = child;
     
     let file_extension = if format == "audio" { "mp3" } else { "mp4" };
-    let file_regex = Regex::new(&format!(r#"(?:\[ffmpeg\] Destination: |\[ffmpeg\] Merging formats into "|(?:\[download\] )).+?([^/\\]+\.{})(?:\"|\s|$)"#, 
-        file_extension)).unwrap();
+    let file_regex = Regex::new(&format!(r#"Destination:\s+.*[/\\]([^/\\]+\.{})"#, file_extension)).unwrap();
 
     while let Some(event) = rx.recv().await {
         match event {

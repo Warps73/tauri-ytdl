@@ -5,7 +5,8 @@ import { notifications } from '@mantine/notifications';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import { invoke } from "@tauri-apps/api/core";
-import { open, show } from '@tauri-apps/plugin-shell';
+import { revealItemInDir, openPath } from '@tauri-apps/plugin-opener';
+import { open } from '@tauri-apps/plugin-shell';
 
 // Fonction pour formater le chemin du fichier
 const formatFilePath = (path) => {
@@ -117,7 +118,7 @@ function App() {
                       variant="light" 
                       size="sm"
                       leftSection={<IconFolder size={16} />}
-                      onClick={() => show(downloadedFile)}
+                      onClick={() => revealItemInDir(downloadedFile)}
                     >
                       Localiser le fichier
                     </Button>

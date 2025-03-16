@@ -3,6 +3,9 @@ use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 use regex::Regex;
 use dirs;
+use filetime::FileTime;
+use std::fs;
+use std::time::SystemTime;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -76,6 +79,12 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
             CommandEvent::Terminated(status) => {
                 return if status.code == Some(0) {
                     if let Some(path) = file_path {
+                        // Mettre à jour la date de modification du fichier
+                        let now = SystemTime::now();
+                        let ft = FileTime::from_system_time(now);
+                        if let Err(e) = filetime::set_file_mtime(&path, ft) {
+                            println!("Erreur lors de la mise à jour de la date de modification: {}", e);
+                        }
                         Ok(path.to_string_lossy().into_owned())
                     } else {
                         Ok("Téléchargement réussi mais impossible de récupérer le chemin du fichier".to_string())

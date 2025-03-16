@@ -18,7 +18,7 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
         .ok_or_else(|| "Impossible de trouver le dossier de téléchargement".to_string())?;
     let mut file_path = None;
 
-    let output_template = download_dir.join("%(title)s.%(ext)s").to_string_lossy().into_owned();
+    let output_template = download_dir.join("%(title)s.%(ext)s");
 
     let mut args = Vec::new();
     
@@ -46,7 +46,7 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
 
     args.extend_from_slice(&[
         "-o",
-        &output_template,
+        output_template.to_str().ok_or("Chemin invalide")?,
         &url,
     ]);
 
@@ -55,9 +55,8 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
     let child = sidecar_command.spawn().map_err(|e| e.to_string())?;
     let (mut rx, child) = child;
     
-    // Regex pour extraire le nom du fichier, adaptée selon le format
     let file_extension = if format == "audio" { "mp3" } else { "mp4" };
-    let file_regex = Regex::new(&format!(r#"(?:\[ffmpeg\] Destination: |\[ffmpeg\] Merging formats into "|(?:\[download\] )).+?([^/]+\.{})(?:\"|\s|$)"#, 
+    let file_regex = Regex::new(&format!(r#"(?:\[ffmpeg\] Destination: |\[ffmpeg\] Merging formats into "|(?:\[download\] )).+?([^/\\]+\.{})(?:\"|\s|$)"#, 
         file_extension)).unwrap();
 
     while let Some(event) = rx.recv().await {
@@ -66,7 +65,6 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
                 let line_str = String::from_utf8_lossy(&line);
                 println!("{}", line_str);
                 
-                // Cherche le nom du fichier dans la sortie
                 if let Some(captures) = file_regex.captures(&line_str) {
                     if let Some(filename) = captures.get(1) {
                         file_path = Some(download_dir.join(filename.as_str()));
@@ -79,11 +77,12 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
             CommandEvent::Terminated(status) => {
                 return if status.code == Some(0) {
                     if let Some(path) = file_path {
-                        // Mettre à jour la date de modification du fichier
-                        let now = SystemTime::now();
-                        let ft = FileTime::from_system_time(now);
-                        if let Err(e) = filetime::set_file_mtime(&path, ft) {
-                            println!("Erreur lors de la mise à jour de la date de modification: {}", e);
+                        if path.exists() {
+                            let now = SystemTime::now();
+                            let ft = FileTime::from_system_time(now);
+                            if let Err(e) = filetime::set_file_mtime(&path, ft) {
+                                println!("Erreur lors de la mise à jour de la date de modification: {}", e);
+                            }
                         }
                         Ok(path.to_string_lossy().into_owned())
                     } else {

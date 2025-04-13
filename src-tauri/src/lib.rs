@@ -6,6 +6,12 @@ use dirs;
 use filetime::FileTime;
 use std::fs;
 use std::time::SystemTime;
+use encoding_rs::UTF_8;
+
+// Fonction pour nettoyer les noms de fichiers
+fn clean_filename(filename: &str) -> String {
+    filename.to_string()
+}
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -16,9 +22,39 @@ fn greet(name: &str) -> String {
 async fn download_music(app: tauri::AppHandle, url: String, format: String) -> Result<String, String> {
     let download_dir = dirs::download_dir()
         .ok_or_else(|| "Impossible de trouver le dossier de téléchargement".to_string())?;
-    let mut file_path = None;
+    let mut file_path: Option<std::path::PathBuf> = None;
 
-    let output_template = download_dir.join("%(title)s.%(ext)s");
+    // D'abord, récupérer le titre
+    let title_args = vec![
+        "--get-title",
+        "--encoding",
+        "utf-8",
+        &url,
+    ];
+    println!("Récupération du titre avec les arguments: {:?}", title_args);
+    let title_command = app.shell().sidecar("youtube-dl").unwrap().args(&title_args);
+    let (mut title_rx, title_child) = title_command.spawn().map_err(|e| e.to_string())?;
+    
+    let mut title = String::new();
+    while let Some(event) = title_rx.recv().await {
+        match event {
+            CommandEvent::Stdout(line) => {
+                title = String::from_utf8_lossy(&line).trim().to_string();
+                println!("Titre récupéré: {}", title);
+                break;
+            }
+            CommandEvent::Stderr(line) => {
+                println!("Erreur lors de la récupération du titre: {}", String::from_utf8_lossy(&line));
+            }
+            _ => {}
+        }
+    }
+    title_child.kill().map_err(|e| e.to_string())?;
+
+    // Ensuite, télécharger le fichier
+    let file_extension = if format == "audio" { "mp3" } else { "mp4" };
+    let output_path = download_dir.join(format!("{}.{}", title, file_extension));
+    println!("Chemin de sortie: {}", output_path.display());
 
     let mut args = Vec::new();
     
@@ -45,45 +81,39 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
     }
 
     args.extend_from_slice(&[
+        "--encoding",
+        "utf-8",
         "-o",
-        output_template.to_str().ok_or("Chemin invalide")?,
+        output_path.to_str().ok_or("Chemin invalide")?,
         &url,
     ]);
 
+    println!("Arguments de téléchargement: {:?}", args);
     let sidecar_command = app.shell().sidecar("youtube-dl").unwrap().args(&args);
 
     let child = sidecar_command.spawn().map_err(|e| e.to_string())?;
     let (mut rx, child) = child;
-    
-    let file_extension = if format == "audio" { "mp3" } else { "mp4" };
-    let file_regex = Regex::new(&format!(r#"Destination:\s+.*[/\\]([^/\\]+\.{})"#, file_extension)).unwrap();
 
     while let Some(event) = rx.recv().await {
         match event {
             CommandEvent::Stdout(line) => {
-                let line_str = String::from_utf8_lossy(&line);
-                println!("{}", line_str);
-                
-                if let Some(captures) = file_regex.captures(&line_str) {
-                    if let Some(filename) = captures.get(1) {
-                        file_path = Some(download_dir.join(filename.as_str()));
-                    }
-                }
+                println!("{}", String::from_utf8_lossy(&line));
             }
             CommandEvent::Stderr(line) => {
                 println!("Error: {}", String::from_utf8_lossy(&line));
             }
             CommandEvent::Terminated(status) => {
                 return if status.code == Some(0) {
-                    if let Some(path) = file_path {
-                        if path.exists() {
-                            let now = SystemTime::now();
-                            let ft = FileTime::from_system_time(now);
-                            if let Err(e) = filetime::set_file_mtime(&path, ft) {
-                                println!("Erreur lors de la mise à jour de la date de modification: {}", e);
-                            }
+                    if output_path.exists() {
+                        let now = SystemTime::now();
+                        let ft = FileTime::from_system_time(now);
+                        if let Err(e) = filetime::set_file_mtime(&output_path, ft) {
+                            println!("Erreur lors de la mise à jour de la date de modification: {}", e);
                         }
-                        Ok(path.to_string_lossy().into_owned())
+                        if let Err(e) = filetime::set_file_atime(&output_path, ft) {
+                            println!("Erreur lors de la mise à jour de la date d'accès: {}", e);
+                        }
+                        Ok(output_path.to_string_lossy().into_owned())
                     } else {
                         Ok("Téléchargement réussi mais impossible de récupérer le chemin du fichier".to_string())
                     }

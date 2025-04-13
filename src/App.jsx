@@ -5,7 +5,7 @@ import { notifications } from '@mantine/notifications';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import { invoke } from "@tauri-apps/api/core";
-import { revealItemInDir, openPath } from '@tauri-apps/plugin-opener';
+import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { open } from '@tauri-apps/plugin-shell';
 
 // Fonction pour formater le chemin du fichier
@@ -13,8 +13,8 @@ const formatFilePath = (path) => {
   try {
     // Extrait juste le nom du fichier du chemin complet
     const fileName = path.split(/[/\\]/).pop();
-    // Décode les caractères spéciaux
-    return decodeURIComponent(fileName);
+    // Retourne le nom du fichier tel quel, sans décodage
+    return fileName;
   } catch (e) {
     return path;
   }
@@ -59,6 +59,36 @@ function App() {
     }
   };
 
+  const handleOpenFile = async () => {
+    if (downloadedFile) {
+      try {
+        // Utiliser le chemin complet tel quel
+        await open(downloadedFile);
+      } catch (error) {
+        notifications.show({
+          title: 'Erreur',
+          message: 'Impossible d\'ouvrir le fichier',
+          color: 'red',
+        });
+      }
+    }
+  };
+
+  const handleRevealFile = async () => {
+    if (downloadedFile) {
+      try {
+        // Utiliser le chemin complet tel quel
+        await revealItemInDir(downloadedFile);
+      } catch (error) {
+        notifications.show({
+          title: 'Erreur',
+          message: 'Impossible de localiser le fichier',
+          color: 'red',
+        });
+      }
+    }
+  };
+
   return (
     <MantineProvider>
       <Container size="sm" py="xl">
@@ -68,11 +98,9 @@ function App() {
               <IconBrandYoutube size={40} color="red" />
               <Title order={1}>YouTube Downloader</Title>
             </Group>
-
             <Text c="dimmed" ta="center">
               Entrez une URL YouTube pour télécharger la musique
             </Text>
-
             <TextInput
               placeholder="https://www.youtube.com/watch?v=..."
               value={url}
@@ -99,18 +127,17 @@ function App() {
             >
               {downloading ? 'Téléchargement en cours...' : 'Télécharger'}
             </Button>
-
             {downloadedFile && (
               <Alert title="Téléchargement réussi" color="green" icon={<IconCheck size={16} />}>
                 <Stack spacing="xs">
-                  <Text>Fichier : {formatFilePath(downloadedFile)}</Text>
-                  <Text size="sm" c="dimmed">Dossier : {downloadedFile.substring(0, downloadedFile.lastIndexOf(formatFilePath(downloadedFile)))}</Text>
+                  <Text>Fichier : {downloadedFile.split(/[/\\]/).pop()}</Text>
+                  <Text size="sm" c="dimmed">Dossier : {downloadedFile.substring(0, downloadedFile.lastIndexOf('/') + 1)}</Text>
                   <Group mt="sm">
                     <Button 
                       variant="light" 
                       size="sm"
                       leftSection={<IconFile size={16} />}
-                      onClick={() => open(downloadedFile)}
+                      onClick={handleOpenFile}
                     >
                       Ouvrir le fichier
                     </Button>
@@ -118,7 +145,7 @@ function App() {
                       variant="light" 
                       size="sm"
                       leftSection={<IconFolder size={16} />}
-                      onClick={() => revealItemInDir(downloadedFile)}
+                      onClick={handleRevealFile}
                     >
                       Localiser le fichier
                     </Button>

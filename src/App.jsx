@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { MantineProvider, Container, TextInput, Button, Paper, Title, Text, Stack, Group, Select, Alert } from '@mantine/core';
-import { IconDownload, IconBrandYoutube, IconCheck, IconFolder, IconFile } from '@tabler/icons-react';
+import { MantineProvider, Container, TextInput, Button, Paper, Title, Text, Stack, Group, Select, Alert, Code, ScrollArea, Progress, Collapse } from '@mantine/core';
+import { IconDownload, IconBrandYoutube, IconCheck, IconFolder, IconFile, IconTerminal, IconChevronDown, IconChevronUp } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { open } from '@tauri-apps/plugin-shell';
 
@@ -25,6 +26,11 @@ function App() {
   const [format, setFormat] = useState('audio');
   const [downloading, setDownloading] = useState(false);
   const [downloadedFile, setDownloadedFile] = useState(null);
+  const [output, setOutput] = useState([]);
+  const [progress, setProgress] = useState(0);
+  const [downloadSpeed, setDownloadSpeed] = useState('');
+  const [eta, setEta] = useState('');
+  const [terminalOpen, setTerminalOpen] = useState(true);
 
   const handleDownload = async () => {
     if (!url) {
@@ -39,7 +45,36 @@ function App() {
     try {
       setDownloading(true);
       setDownloadedFile(null);
+      setOutput([]);
+      setProgress(0);
+      setDownloadSpeed('');
+      setEta('');
+
+      // Créer un listener pour les événements de sortie
+      const unlisten = await listen('download-output', (event) => {
+        console.log(event.payload);
+        setOutput(prev => [...prev, event.payload]);
+
+        // Extraire les informations de progression
+        const progressMatch = event.payload.match(/\[download\]\s+(\d+\.\d+)%/);
+        const speedMatch = event.payload.match(/at\s+([\d.]+[KMG]iB\/s)/);
+        const etaMatch = event.payload.match(/ETA\s+(\d+:\d+)/);
+
+        if (progressMatch) {
+          setProgress(parseFloat(progressMatch[1]));
+        }
+        if (speedMatch) {
+          setDownloadSpeed(speedMatch[1]);
+        }
+        if (etaMatch) {
+          setEta(etaMatch[1]);
+        }
+      });
+
       const filePath = await invoke("download_music", { url, format });
+      
+      // Nettoyer le listener
+      unlisten();
 
       setDownloadedFile(filePath);
       notifications.show({
@@ -49,11 +84,13 @@ function App() {
         icon: <IconCheck size={16} />,
       });
     } catch (error) {
+      const errorMessage = error?.toString() || 'Échec du téléchargement';
       notifications.show({
         title: 'Erreur',
-        message: error || 'Échec du téléchargement',
-        color: 'red',
+        message: errorMessage,
+        color: 'red'
       });
+      setOutput(prev => [...prev, `Erreur: ${errorMessage}`]);
     } finally {
       setDownloading(false);
     }
@@ -127,6 +164,52 @@ function App() {
             >
               {downloading ? 'Téléchargement en cours...' : 'Télécharger'}
             </Button>
+
+            {/* Terminal Output */}
+            <Paper withBorder p="md" radius="md">
+              {downloading && (
+                <Stack spacing="xs" mb="md">
+                  <Group justify="space-between">
+                    <Text size="sm">Progression</Text>
+                    <Text size="sm">{progress.toFixed(1)}%</Text>
+                  </Group>
+                  <Progress value={progress} size="sm" />
+                  <Group justify="space-between">
+                    <Text size="sm">Vitesse: {downloadSpeed}</Text>
+                    <Text size="sm">Temps restant: {eta}</Text>
+                  </Group>
+                </Stack>
+              )}
+              <Group mb="xs" justify="space-between">
+                <Group>
+                  <IconTerminal size={20} />
+                  <Text fw={500}>Sortie de la commande</Text>
+                </Group>
+                <Button 
+                  variant="subtle" 
+                  size="xs" 
+                  onClick={() => setTerminalOpen(!terminalOpen)}
+                  leftSection={terminalOpen ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+                >
+                  {terminalOpen ? 'Réduire' : 'Développer'}
+                </Button>
+              </Group>
+              <Collapse in={terminalOpen}>
+                <ScrollArea h={200} type="auto">
+                  <Code block style={{ backgroundColor: '#1a1b1e', whiteSpace: 'pre-wrap', minHeight: '200px' }}>
+                    {output.length > 0 
+                      ? output.map((line, index) => (
+                          <div key={index} style={{ color: '#e9ecef' }}>{line}</div>
+                        ))
+                      : <div style={{ color: '#868e96', textAlign: 'center', padding: '2rem 0' }}>
+                          En attente d'une commande...
+                        </div>
+                    }
+                  </Code>
+                </ScrollArea>
+              </Collapse>
+            </Paper>
+
             {downloadedFile && (
               <Alert title="Téléchargement réussi" color="green" icon={<IconCheck size={16} />}>
                 <Stack spacing="xs">

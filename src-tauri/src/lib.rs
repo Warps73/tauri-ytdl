@@ -1,6 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
+use tauri::Emitter;
 use regex::Regex;
 use dirs;
 use filetime::FileTime;
@@ -40,11 +41,15 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
         match event {
             CommandEvent::Stdout(line) => {
                 title = String::from_utf8_lossy(&line).trim().to_string();
-                println!("Titre récupéré: {}", title);
+                let output = format!("Titre récupéré: {}", title);
+                println!("{}", output);
+                app.emit("download-output", output).ok();
                 break;
             }
             CommandEvent::Stderr(line) => {
-                println!("Erreur lors de la récupération du titre: {}", String::from_utf8_lossy(&line));
+                let error = format!("Erreur lors de la récupération du titre: {}", String::from_utf8_lossy(&line));
+                println!("{}", error);
+                app.emit("download-output", error).ok();
             }
             _ => {}
         }
@@ -54,7 +59,9 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
     // Ensuite, télécharger le fichier
     let file_extension = if format == "audio" { "mp3" } else { "mp4" };
     let output_path = download_dir.join(format!("{}.{}", title, file_extension));
-    println!("Chemin de sortie: {}", output_path.display());
+    let path_output = format!("Chemin de sortie: {}", output_path.display());
+    println!("{}", path_output);
+    app.emit("download-output", path_output).ok();
 
     let mut args = Vec::new();
     
@@ -88,19 +95,25 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
         &url,
     ]);
 
-    println!("Arguments de téléchargement: {:?}", args);
-    let sidecar_command = app.shell().sidecar("youtube-dl").unwrap().args(&args);
+    let args_output = format!("Arguments de téléchargement: {:?}", args);
+    println!("{}", args_output);
+    app.emit("download-output", args_output).ok();
 
+    let sidecar_command = app.shell().sidecar("youtube-dl").unwrap().args(&args);
     let child = sidecar_command.spawn().map_err(|e| e.to_string())?;
     let (mut rx, child) = child;
 
     while let Some(event) = rx.recv().await {
         match event {
             CommandEvent::Stdout(line) => {
-                println!("{}", String::from_utf8_lossy(&line));
+                let output = String::from_utf8_lossy(&line).to_string();
+                println!("{}", output);
+                app.emit("download-output", output).ok();
             }
             CommandEvent::Stderr(line) => {
-                println!("Error: {}", String::from_utf8_lossy(&line));
+                let error = format!("Error: {}", String::from_utf8_lossy(&line));
+                println!("{}", error);
+                app.emit("download-output", error).ok();
             }
             CommandEvent::Terminated(status) => {
                 return if status.code == Some(0) {
@@ -108,10 +121,14 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
                         let now = SystemTime::now();
                         let ft = FileTime::from_system_time(now);
                         if let Err(e) = filetime::set_file_mtime(&output_path, ft) {
-                            println!("Erreur lors de la mise à jour de la date de modification: {}", e);
+                            let error = format!("Erreur lors de la mise à jour de la date de modification: {}", e);
+                            println!("{}", error);
+                            app.emit("download-output", error).ok();
                         }
                         if let Err(e) = filetime::set_file_atime(&output_path, ft) {
-                            println!("Erreur lors de la mise à jour de la date d'accès: {}", e);
+                            let error = format!("Erreur lors de la mise à jour de la date d'accès: {}", e);
+                            println!("{}", error);
+                            app.emit("download-output", error).ok();
                         }
                         Ok(output_path.to_string_lossy().into_owned())
                     } else {

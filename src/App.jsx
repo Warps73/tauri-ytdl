@@ -11,7 +11,7 @@ import { open } from '@tauri-apps/plugin-shell';
 
 function App() {
   const [activeTab, setActiveTab] = useState('video');
-  
+
   // État partagé
   const [output, setOutput] = useState([]);
   const [progress, setProgress] = useState(0);
@@ -81,7 +81,7 @@ function App() {
       resetSharedState();
 
       const filePath = await invoke("download_music", { url, format });
-      
+
       setDownloadedFile(filePath);
       notifications.show({
         title: 'Succès',
@@ -204,9 +204,9 @@ function App() {
   };
 
   const toggleSelectVideo = (videoId) => {
-    setSelectedVideos(prev => 
-      prev.includes(videoId) 
-        ? prev.filter(id => id !== videoId) 
+    setSelectedVideos(prev =>
+      prev.includes(videoId)
+        ? prev.filter(id => id !== videoId)
         : [...prev, videoId]
     );
   };
@@ -225,6 +225,7 @@ function App() {
         <Checkbox
           checked={selectedVideos.includes(video.id)}
           onChange={() => toggleSelectVideo(video.id)}
+          color="orange"
         />
       </Table.Td>
       <Table.Td>
@@ -245,8 +246,8 @@ function App() {
               <IconBrandYoutube size={40} color="red" />
               <Title order={1}>YouTube Downloader</Title>
             </Group>
-            
-            <Tabs value={activeTab} onChange={setActiveTab}>
+
+            <Tabs value={activeTab} onChange={setActiveTab} color="orange">
               <Tabs.List grow>
                 <Tabs.Tab value="video" icon={<IconVideo size={16} />}>Vidéo Unique</Tabs.Tab>
                 <Tabs.Tab value="playlist" icon={<IconList size={16} />}>Playlist</Tabs.Tab>
@@ -289,16 +290,16 @@ function App() {
                         <Text>Fichier : {downloadedFile.split(/[\\/]/).pop()}</Text>
                         <Text size="sm" c="dimmed">Dossier : {downloadedFile.substring(0, downloadedFile.lastIndexOf('/') + 1)}</Text>
                         <Group mt="sm">
-                          <Button 
-                            variant="light" 
+                          <Button
+                            variant="light"
                             size="sm"
                             leftSection={<IconFile size={16} />}
                             onClick={() => handleOpenFile(downloadedFile)}
                           >
                             Ouvrir le fichier
                           </Button>
-                          <Button 
-                            variant="light" 
+                          <Button
+                            variant="light"
                             size="sm"
                             leftSection={<IconFolder size={16} />}
                             onClick={() => handleRevealFile(downloadedFile)}
@@ -328,6 +329,8 @@ function App() {
                     />
                     <Button
                       size="md"
+                      variant="gradient"
+                      gradient={{ from: 'red', to: 'orange' }}
                       leftSection={<IconRefresh size={20} />}
                       loading={loadingPlaylist}
                       onClick={handleGetPlaylistInfo}
@@ -344,7 +347,8 @@ function App() {
                       </Group>
                       <Group>
                         <Button 
-                          variant="outline" 
+                          variant="gradient" 
+                          gradient={{ from: 'red', to: 'orange' }} 
                           size="xs" 
                           onClick={toggleSelectAllVideos}
                           leftSection={selectedVideos.length === playlistVideos.length ? <IconSquareOff size={16} /> : <IconSelectAll size={16} />}
@@ -357,10 +361,11 @@ function App() {
                           <Table.Thead>
                             <Table.Tr>
                               <Table.Th>
-                                <Checkbox 
+                                <Checkbox
                                   checked={playlistVideos.length > 0 && selectedVideos.length === playlistVideos.length}
                                   indeterminate={selectedVideos.length > 0 && selectedVideos.length < playlistVideos.length}
                                   onChange={toggleSelectAllVideos}
+                                  color="orange"
                                 />
                               </Table.Th>
                               <Table.Th>Miniature</Table.Th>
@@ -388,7 +393,7 @@ function App() {
                         onClick={handleDownloadPlaylist}
                         disabled={selectedVideos.length === 0}
                         variant="gradient"
-                        gradient={{ from: 'blue', to: 'cyan' }}
+                        gradient={{ from: 'red', to: 'orange' }}
                       >
                         {downloadingPlaylist ? `Téléchargement en cours (${selectedVideos.length} vidéos)...` : `Télécharger les ${selectedVideos.length} vidéos sélectionnées`}
                       </Button>
@@ -420,7 +425,7 @@ function App() {
               </Tabs.Panel>
             </Tabs>
 
-            {/* Terminal Output - Partagé */} 
+            {/* Terminal Output - Partagé */}
             <Paper withBorder p="md" radius="md" mt="xl">
               {(downloading || downloadingPlaylist) && (
                 <Stack spacing="xs" mb="md">
@@ -440,9 +445,9 @@ function App() {
                   <IconTerminal size={20} />
                   <Text fw={500}>Sortie de la commande</Text>
                 </Group>
-                <Button 
-                  variant="subtle" 
-                  size="xs" 
+                <Button
+                  variant="subtle"
+                  size="xs"
                   onClick={() => setTerminalOpen(!terminalOpen)}
                   leftSection={terminalOpen ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
                 >
@@ -452,7 +457,7 @@ function App() {
               <Collapse in={terminalOpen}>
                 <ScrollArea h={200} type="auto">
                   <Code block style={{ backgroundColor: '#1a1b1e', whiteSpace: 'pre-wrap', minHeight: '200px' }}>
-                    {output.length > 0 
+                    {output.length > 0
                       ? output.map((line, index) => (
                           <div key={index} style={{ color: '#e9ecef' }}>{line}</div>
                         ))

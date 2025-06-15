@@ -30,6 +30,8 @@ async fn get_playlist_info(app: tauri::AppHandle, playlist_url: String) -> Resul
     let args = vec![
         "--flat-playlist",
         "--dump-json",
+        "--playlist-items",
+        "1-25",
         "--no-warnings",
         "--encoding",
         "utf-8",

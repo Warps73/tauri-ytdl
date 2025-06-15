@@ -11,11 +11,6 @@ use encoding_rs::UTF_8;
 use serde::{Deserialize, Serialize};
 use serde_json::{self, Value};
 
-// Fonction pour nettoyer les noms de fichiers
-fn clean_filename(filename: &str) -> String {
-    filename.to_string()
-}
-
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -40,7 +35,7 @@ async fn get_playlist_info(app: tauri::AppHandle, playlist_url: String) -> Resul
         "utf-8",
         &playlist_url,
     ];
-    
+
     let output = format!("Récupération des informations de la playlist avec les arguments: {:?}", args);
     println!("{}", output);
     app.emit("download-output", output).ok();
@@ -72,6 +67,7 @@ async fn get_playlist_info(app: tauri::AppHandle, playlist_url: String) -> Resul
 
     // Traiter les données JSON
     let mut videos = Vec::new();
+
     for line in json_data.lines() {
         if line.trim().is_empty() {
             continue;
@@ -79,50 +75,84 @@ async fn get_playlist_info(app: tauri::AppHandle, playlist_url: String) -> Resul
 
         match serde_json::from_str::<Value>(line) {
             Ok(json) => {
+                let thumbnail_url = json.get("thumbnails")
+                    .and_then(|thumbs| thumbs.as_array())
+                    .and_then(|arr| arr.get(0)) // Prendre la première miniature
+                    .and_then(|thumb_obj| thumb_obj.get("url"))
+                    .and_then(|url_val| url_val.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                let duration_value =
+                    if let Some(ds_str) = json.get("duration_string").and_then(|v| v.as_str()) {
+                        ds_str.to_string()
+                    } else if let Some(d_f64) = json.get("duration").and_then(|v| v.as_f64()) {
+                        format_duration(d_f64)
+                    } else {
+                        "".to_string()
+                    };
+
                 let video = PlaylistVideo {
                     id: json["id"].as_str().unwrap_or("").to_string(),
                     title: json["title"].as_str().unwrap_or("").to_string(),
-                    thumbnail: json["thumbnail"].as_str().unwrap_or("").to_string(),
-                    duration: json["duration_string"].as_str().unwrap_or("").to_string(),
+                    thumbnail: thumbnail_url,
+                    duration: duration_value,
                     uploader: json["uploader"].as_str().unwrap_or("").to_string(),
                 };
                 videos.push(video);
             }
             Err(e) => {
-                let error = format!("Erreur de parsing JSON: {}", e);
-                println!("{}", error);
-                app.emit("download-output", error).ok();
+                let error_msg = format!("Erreur de désérialisation JSON pour une vidéo : {} - Ligne: {}", e, line);
+                println!("{}", error_msg);
+                app.emit("download-output", error_msg).ok();
             }
         }
+    }
+
+    if videos.is_empty() && !json_data.trim().is_empty() {
+        let error_msg = "Aucune vidéo n'a pu être extraite du JSON, bien que des données aient été reçues.".to_string();
+        println!("{}", error_msg);
+        app.emit("download-output", error_msg.clone()).ok();
+        return Err(error_msg);
     }
 
     let info = format!("Nombre de vidéos trouvées dans la playlist: {}", videos.len());
     println!("{}", info);
     app.emit("download-output", info).ok();
 
-    if videos.is_empty() {
-        return Err("Aucune vidéo trouvée dans la playlist".to_string());
-    }
-
     Ok(videos)
+}
+
+// Helper function to format duration from seconds to MM:SS or HH:MM:SS
+fn format_duration(seconds_f64: f64) -> String {
+    let total_seconds = seconds_f64.round() as u64;
+    let hours = total_seconds / 3600;
+    let minutes = (total_seconds % 3600) / 60;
+    let seconds = total_seconds % 60;
+
+    if hours > 0 {
+        format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+    } else {
+        format!("{:02}:{:02}", minutes, seconds)
+    }
 }
 
 #[tauri::command]
 async fn download_playlist_videos(app: tauri::AppHandle, video_ids: Vec<String>, format: String) -> Result<Vec<String>, String> {
     let download_dir = dirs::download_dir()
         .ok_or_else(|| "Impossible de trouver le dossier de téléchargement".to_string())?;
-    
+
     let mut downloaded_files = Vec::new();
     let total_videos = video_ids.len();
-    
+
     for (index, video_id) in video_ids.iter().enumerate() {
         let progress_info = format!("Téléchargement de la vidéo {}/{} (ID: {})", index + 1, total_videos, video_id);
         println!("{}", progress_info);
         app.emit("download-output", progress_info).ok();
-        
+
         // Construire l'URL YouTube à partir de l'ID
         let url = format!("https://www.youtube.com/watch?v={}", video_id);
-        
+
         // D'abord, récupérer le titre
         let title_args = vec![
             "--get-title",
@@ -131,7 +161,7 @@ async fn download_playlist_videos(app: tauri::AppHandle, video_ids: Vec<String>,
             "utf-8",
             &url,
         ];
-        
+
         let title_command = app.shell().sidecar("yt-dlp").unwrap().args(&title_args);
         let (mut title_rx, title_child) = title_command.spawn().map_err(|e| e.to_string())?;
 
@@ -258,7 +288,7 @@ async fn download_playlist_videos(app: tauri::AppHandle, video_ids: Vec<String>,
 async fn download_music(app: tauri::AppHandle, url: String, format: String) -> Result<String, String> {
     let download_dir = dirs::download_dir()
         .ok_or_else(|| "Impossible de trouver le dossier de téléchargement".to_string())?;
-    let mut file_path: Option<std::path::PathBuf> = None;
+    let file_path: Option<std::path::PathBuf> = None;
 
     // D'abord, récupérer le titre
     let title_args = vec![
@@ -390,9 +420,9 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            greet, 
-            download_music, 
-            get_playlist_info, 
+            greet,
+            download_music,
+            get_playlist_info,
             download_playlist_videos
         ])
         .run(tauri::generate_context!())

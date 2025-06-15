@@ -32,7 +32,7 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "./binaries/youtube-dl"
+      "./binaries/yt-dlp"
     ]
   }
 }

@@ -28,14 +28,15 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
     // D'abord, récupérer le titre
     let title_args = vec![
         "--get-title",
+        "--no-warnings",
         "--encoding",
         "utf-8",
         &url,
     ];
     println!("Récupération du titre avec les arguments: {:?}", title_args);
-    let title_command = app.shell().sidecar("youtube-dl").unwrap().args(&title_args);
+    let title_command = app.shell().sidecar("yt-dlp").unwrap().args(&title_args);
     let (mut title_rx, title_child) = title_command.spawn().map_err(|e| e.to_string())?;
-    
+
     let mut title = String::new();
     while let Some(event) = title_rx.recv().await {
         match event {
@@ -64,7 +65,7 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
     app.emit("download-output", path_output).ok();
 
     let mut args = Vec::new();
-    
+
     match format.as_str() {
         "audio" => {
             args.extend_from_slice(&[
@@ -74,6 +75,7 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
                 "--audio-quality",
                 "0",
                 "--prefer-ffmpeg",
+                "--no-playlist",
             ]);
         },
         "video" => {
@@ -82,6 +84,7 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
                 "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
                 "--merge-output-format",
                 "mp4",
+                "--no-playlist",
             ]);
         },
         _ => return Err("Format non supporté. Utilisez 'audio' ou 'video'".to_string()),
@@ -99,7 +102,7 @@ async fn download_music(app: tauri::AppHandle, url: String, format: String) -> R
     println!("{}", args_output);
     app.emit("download-output", args_output).ok();
 
-    let sidecar_command = app.shell().sidecar("youtube-dl").unwrap().args(&args);
+    let sidecar_command = app.shell().sidecar("yt-dlp").unwrap().args(&args);
     let child = sidecar_command.spawn().map_err(|e| e.to_string())?;
     let (mut rx, child) = child;
 

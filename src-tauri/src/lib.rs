@@ -8,6 +8,8 @@ use filetime::FileTime;
 use std::fs;
 use std::time::SystemTime;
 use encoding_rs::UTF_8;
+use serde::{Deserialize, Serialize};
+use serde_json::{self, Value};
 
 // Fonction pour nettoyer les noms de fichiers
 fn clean_filename(filename: &str) -> String {
@@ -17,6 +19,239 @@ fn clean_filename(filename: &str) -> String {
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PlaylistVideo {
+    id: String,
+    title: String,
+    thumbnail: String,
+    duration: String,
+    uploader: String,
+}
+
+#[tauri::command]
+async fn get_playlist_info(app: tauri::AppHandle, playlist_url: String) -> Result<Vec<PlaylistVideo>, String> {
+    let args = vec![
+        "--flat-playlist",
+        "--dump-json",
+        "--no-warnings",
+        "--encoding",
+        "utf-8",
+        &playlist_url,
+    ];
+    
+    let output = format!("Récupération des informations de la playlist avec les arguments: {:?}", args);
+    println!("{}", output);
+    app.emit("download-output", output).ok();
+
+    let command = app.shell().sidecar("yt-dlp").unwrap().args(&args);
+    let (mut rx, child) = command.spawn().map_err(|e| e.to_string())?;
+
+    let mut json_data = String::new();
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(line) => {
+                let line_str = String::from_utf8_lossy(&line).to_string();
+                json_data.push_str(&line_str);
+                json_data.push('\n');
+            }
+            CommandEvent::Stderr(line) => {
+                let error = format!("Erreur lors de la récupération des informations: {}", String::from_utf8_lossy(&line));
+                println!("{}", error);
+                app.emit("download-output", error).ok();
+            }
+            CommandEvent::Terminated(status) => {
+                if status.code != Some(0) {
+                    return Err("Échec de la récupération des informations de la playlist".to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Traiter les données JSON
+    let mut videos = Vec::new();
+    for line in json_data.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        match serde_json::from_str::<Value>(line) {
+            Ok(json) => {
+                let video = PlaylistVideo {
+                    id: json["id"].as_str().unwrap_or("").to_string(),
+                    title: json["title"].as_str().unwrap_or("").to_string(),
+                    thumbnail: json["thumbnail"].as_str().unwrap_or("").to_string(),
+                    duration: json["duration_string"].as_str().unwrap_or("").to_string(),
+                    uploader: json["uploader"].as_str().unwrap_or("").to_string(),
+                };
+                videos.push(video);
+            }
+            Err(e) => {
+                let error = format!("Erreur de parsing JSON: {}", e);
+                println!("{}", error);
+                app.emit("download-output", error).ok();
+            }
+        }
+    }
+
+    let info = format!("Nombre de vidéos trouvées dans la playlist: {}", videos.len());
+    println!("{}", info);
+    app.emit("download-output", info).ok();
+
+    if videos.is_empty() {
+        return Err("Aucune vidéo trouvée dans la playlist".to_string());
+    }
+
+    Ok(videos)
+}
+
+#[tauri::command]
+async fn download_playlist_videos(app: tauri::AppHandle, video_ids: Vec<String>, format: String) -> Result<Vec<String>, String> {
+    let download_dir = dirs::download_dir()
+        .ok_or_else(|| "Impossible de trouver le dossier de téléchargement".to_string())?;
+    
+    let mut downloaded_files = Vec::new();
+    let total_videos = video_ids.len();
+    
+    for (index, video_id) in video_ids.iter().enumerate() {
+        let progress_info = format!("Téléchargement de la vidéo {}/{} (ID: {})", index + 1, total_videos, video_id);
+        println!("{}", progress_info);
+        app.emit("download-output", progress_info).ok();
+        
+        // Construire l'URL YouTube à partir de l'ID
+        let url = format!("https://www.youtube.com/watch?v={}", video_id);
+        
+        // D'abord, récupérer le titre
+        let title_args = vec![
+            "--get-title",
+            "--no-warnings",
+            "--encoding",
+            "utf-8",
+            &url,
+        ];
+        
+        let title_command = app.shell().sidecar("yt-dlp").unwrap().args(&title_args);
+        let (mut title_rx, title_child) = title_command.spawn().map_err(|e| e.to_string())?;
+
+        let mut title = String::new();
+        while let Some(event) = title_rx.recv().await {
+            match event {
+                CommandEvent::Stdout(line) => {
+                    title = String::from_utf8_lossy(&line).trim().to_string();
+                    let output = format!("Titre récupéré: {}", title);
+                    println!("{}", output);
+                    app.emit("download-output", output).ok();
+                    break;
+                }
+                CommandEvent::Stderr(line) => {
+                    let error = format!("Erreur lors de la récupération du titre: {}", String::from_utf8_lossy(&line));
+                    println!("{}", error);
+                    app.emit("download-output", error).ok();
+                }
+                _ => {}
+            }
+        }
+        title_child.kill().map_err(|e| e.to_string())?;
+
+        // Ensuite, télécharger le fichier
+        let file_extension = if format == "audio" { "mp3" } else { "mp4" };
+        let output_path = download_dir.join(format!("{}.{}", title, file_extension));
+        let path_output = format!("Chemin de sortie: {}", output_path.display());
+        println!("{}", path_output);
+        app.emit("download-output", path_output).ok();
+
+        let mut args = Vec::new();
+
+        match format.as_str() {
+            "audio" => {
+                args.extend_from_slice(&[
+                    "-x",
+                    "--audio-format",
+                    "mp3",
+                    "--audio-quality",
+                    "0",
+                    "--prefer-ffmpeg",
+                    "--no-playlist",
+                ]);
+            },
+            "video" => {
+                args.extend_from_slice(&[
+                    "-f",
+                    "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                    "--merge-output-format",
+                    "mp4",
+                    "--no-playlist",
+                ]);
+            },
+            _ => return Err("Format non supporté. Utilisez 'audio' ou 'video'".to_string()),
+        }
+
+        args.extend_from_slice(&[
+            "--encoding",
+            "utf-8",
+            "-o",
+            output_path.to_str().ok_or("Chemin invalide")?,
+            &url,
+        ]);
+
+        let args_output = format!("Arguments de téléchargement: {:?}", args);
+        println!("{}", args_output);
+        app.emit("download-output", args_output).ok();
+
+        let sidecar_command = app.shell().sidecar("yt-dlp").unwrap().args(&args);
+        let (mut rx, child) = sidecar_command.spawn().map_err(|e| e.to_string())?;
+
+        let mut success = false;
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(line) => {
+                    let output = String::from_utf8_lossy(&line).to_string();
+                    println!("{}", output);
+                    app.emit("download-output", output).ok();
+                }
+                CommandEvent::Stderr(line) => {
+                    let error = format!("Error: {}", String::from_utf8_lossy(&line));
+                    println!("{}", error);
+                    app.emit("download-output", error).ok();
+                }
+                CommandEvent::Terminated(status) => {
+                    if status.code == Some(0) {
+                        if output_path.exists() {
+                            let now = SystemTime::now();
+                            let ft = FileTime::from_system_time(now);
+                            if let Err(e) = filetime::set_file_mtime(&output_path, ft) {
+                                let error = format!("Erreur lors de la mise à jour de la date de modification: {}", e);
+                                println!("{}", error);
+                                app.emit("download-output", error).ok();
+                            }
+                            if let Err(e) = filetime::set_file_atime(&output_path, ft) {
+                                let error = format!("Erreur lors de la mise à jour de la date d'accès: {}", e);
+                                println!("{}", error);
+                                app.emit("download-output", error).ok();
+                            }
+                            downloaded_files.push(output_path.to_string_lossy().into_owned());
+                            success = true;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if !success {
+            let error = format!("Échec du téléchargement de la vidéo {}", video_id);
+            println!("{}", error);
+            app.emit("download-output", error).ok();
+        }
+    }
+
+    let summary = format!("Téléchargement terminé. {} fichiers téléchargés sur {}", downloaded_files.len(), total_videos);
+    println!("{}", summary);
+    app.emit("download-output", summary).ok();
+
+    Ok(downloaded_files)
 }
 
 #[tauri::command]
@@ -154,7 +389,12 @@ pub fn run() {
         .plugin(tauri_plugin_upload::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, download_music])
+        .invoke_handler(tauri::generate_handler![
+            greet, 
+            download_music, 
+            get_playlist_info, 
+            download_playlist_videos
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
